@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Industrial Digital Twin Dashboard</title>
+
+<link rel="stylesheet"
+href="{{ url_for('static', filename='style.css') }}">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<header>
+    <h1>🏭 Industrial Digital Twin Dashboard</h1>
+</header>
+
+<div class="controls">
+
+    <button onclick="setMode('normal')">
+        Normal
+    </button>
+
+    <button onclick="setMode('fault')">
+        Fault
+    </button>
+
+    <button onclick="setMode('attack')">
+        Attack
+    </button>
+
+</div>
+
+<div class="grid">
+
+    <div class="card">
+        <h2>Status</h2>
+        <div id="status" class="healthy">
+            NORMAL
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Machine Health</h2>
+        <div id="health">95%</div>
+    </div>
+
+    <div class="card">
+
+        <h2>Digital Twin Motor</h2>
+
+        <div class="motor">
+
+            <div class="fan"></div>
+
+            <div class="body"
+                 id="motorBody">
+                INDUSTRIAL MOTOR
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Sensor Readings</h2>
+
+        <p>
+            🌡 Temperature :
+            <span id="temp">0</span>
+        </p>
+
+        <p>
+            📳 Vibration :
+            <span id="vib">0</span>
+        </p>
+
+        <p>
+            ⚡ Current :
+            <span id="curr">0</span>
+        </p>
+
+    </div>
+
+    <div class="card wide">
+
+        <h2>Live Trends</h2>
+
+        <canvas id="chart"></canvas>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Attack Detection</h2>
+
+        <div id="attackinfo">
+            No attack detected
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Remaining Useful Life</h2>
+
+        <div id="rul">
+            120 Days
+        </div>
+
+    </div>
+
+    <div class="card wide">
+
+        <h2>System Logs</h2>
+
+        <pre id="logs"></pre>
+
+    </div>
+
+</div>
+
+<script>
+
+let mode = "normal";
+
+function setMode(newMode){
+
+    mode = newMode;
+
+    console.log("MODE CHANGED TO:", mode);
+
+}
+
+const chart = new Chart(
+    document.getElementById("chart"),
+    {
+        type: "line",
+
+        data: {
+
+            labels: [],
+
+            datasets: [
+
+                {
+                    label: "Temperature",
+                    data: [],
+                    borderColor: "red"
+                },
+
+                {
+                    label: "Vibration",
+                    data: [],
+                    borderColor: "yellow"
+                },
+
+                {
+                    label: "Current",
+                    data: [],
+                    borderColor: "cyan"
+                }
+
+            ]
+        },
+
+        options:{
+            responsive:true
+        }
+    }
+);
+
+async function updateDashboard(){
+
+    try{
+
+        const response =
+            await fetch("/api/data/" + mode);
+
+        const j =
+            await response.json();
+
+        console.log("SERVER MODE:", j.mode);
+
+        document.getElementById("temp").innerText =
+            j.data.temperature + " °C";
+
+        document.getElementById("vib").innerText =
+            j.data.vibration;
+
+        document.getElementById("curr").innerText =
+            j.data.current + " A";
+
+        document.getElementById("health").innerText =
+            j.health + "%";
+
+        document.getElementById("rul").innerText =
+            j.rul + " Days";
+
+        const motor =
+            document.getElementById("motorBody");
+
+        const status =
+            document.getElementById("status");
+
+        const attackInfo =
+            document.getElementById("attackinfo");
+
+        if(j.mode === "fault"){
+
+            console.log("FAULT MODE");
+
+            status.innerHTML =
+                '<span class="warning">⚠ FAULT DETECTED</span>';
+
+            motor.className =
+                "body fault";
+
+            attackInfo.innerHTML =
+                "Machine anomaly detected.";
+
+        }
+
+        else if(j.mode === "attack"){
+
+            console.log("ATTACK MODE");
+
+            status.innerHTML =
+                '<span class="critical">🚨 CYBER ATTACK</span>';
+
+            motor.className =
+                "body attack";
+
+            attackInfo.innerHTML =
+                `
+                Actual Temp:
+                ${j.data.actual_temperature} °C
+
+                <br>
+
+                Reported Temp:
+                ${j.data.temperature} °C
+                `;
+
+        }
+
+        else{
+
+            console.log("NORMAL MODE");
+
+            status.innerHTML =
+                '<span class="healthy">✓ NORMAL</span>';
+
+            motor.className =
+                "body";
+
+            attackInfo.innerHTML =
+                "No attack detected";
+
+        }
+
+        chart.data.labels =
+            j.history.temperature.map(
+                (_,i)=>i+1
+            );
+
+        chart.data.datasets[0].data =
+            j.history.temperature;
+
+        chart.data.datasets[1].data =
+            j.history.vibration;
+
+        chart.data.datasets[2].data =
+            j.history.current;
+
+        chart.update();
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+async function updateLogs(){
+
+    try{
+
+        const response =
+            await fetch("/api/logs");
+
+        const data =
+            await response.json();
+
+        document.getElementById("logs").innerText =
+            data.logs.join("");
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+setInterval(updateDashboard,1000);
+setInterval(updateLogs,1000);
+
+updateDashboard();
+updateLogs();
+
+</script>
+
+</body>
+</html>
